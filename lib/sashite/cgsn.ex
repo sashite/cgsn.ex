@@ -1,11 +1,26 @@
 defmodule Sashite.Cgsn do
   @moduledoc """
-  CGSN (Chess Game Status Notation) implementation for Elixir.
+  CGSN (Chess Game Status Notation) vocabulary for Elixir.
 
-  CGSN provides a rule-agnostic taxonomy of observable game status values
-  for abstract strategy board games. Status values are categorized as either
-  position-inferable (derivable from board position) or explicit-only
-  (requiring external information like history or declarations).
+  This module exposes the **CGSN v1.0.0** standard status identifiers (as strings)
+  and helpers to validate / classify them.
+
+  CGSN statuses are categorized as either:
+
+  - **position-inferable**: can be determined from *Position + Rule System*,
+  - **explicit-only**: require extra context (history, clocks, declarations, etc.).
+
+  This implementation is intentionally **rule-agnostic** and **does not compute**
+  game statuses. It only provides a stable vocabulary and membership checks.
+
+  Specification:
+  https://sashite.dev/specs/cgsn/1.0.0/
+
+  ## Notes
+
+  - Some statuses (e.g. `check`, `stalemate`) are defined **per Terminal Piece** in the spec.
+    Associating such a status with a specific piece belongs to the surrounding protocol / notation.
+  - While the spec allows extensions, this module validates only the **standard v1.0.0 vocabulary**.
 
   ## Examples
 
@@ -18,8 +33,18 @@ defmodule Sashite.Cgsn do
       iex> Sashite.Cgsn.explicit_only?("resignation")
       true
 
+      iex> Sashite.Cgsn.valid?("custom-status")
+      false
   """
 
+  @typedoc """
+  A CGSN status identifier (string).
+
+  This module recognizes only the CGSN v1.0.0 standard vocabulary.
+  """
+  @type status :: String.t()
+
+  # NOTE: Keep ordering stable and aligned with the specification's complete status list.
   @inferable_statuses [
     "check",
     "stale",
@@ -42,147 +67,70 @@ defmodule Sashite.Cgsn do
 
   @statuses @inferable_statuses ++ @explicit_only_statuses
 
-  @type status :: String.t()
+  # Fast membership checks (compile-time constants).
+  @inferable_set MapSet.new(@inferable_statuses)
+  @explicit_only_set MapSet.new(@explicit_only_statuses)
+  @status_set MapSet.new(@statuses)
 
   @doc """
-  Returns all defined CGSN status values.
+  Returns all **CGSN v1.0.0** status identifiers.
 
-  ## Examples
-
-      iex> Sashite.Cgsn.statuses()
-      ["check", "stale", "checkmate", "stalemate", "nomove", "bareking",
-       "mareking", "insufficient", "resignation", "illegalmove", "timelimit",
-       "movelimit", "repetition", "agreement"]
-
+  The returned list has a stable order.
   """
   @spec statuses() :: [status()]
   def statuses, do: @statuses
 
   @doc """
-  Returns all position-inferable status values.
+  Returns all **position-inferable** CGSN v1.0.0 status identifiers.
 
-  Position-inferable statuses can be determined from position analysis
-  when game rules are known.
-
-  ## Examples
-
-      iex> Sashite.Cgsn.inferable_statuses()
-      ["check", "stale", "checkmate", "stalemate", "nomove", "bareking",
-       "mareking", "insufficient"]
-
+  “Position-inferable” means: given the **current Position** and the **Rule System**,
+  the status can be determined without external context (history, clocks, declarations, …).
   """
   @spec inferable_statuses() :: [status()]
   def inferable_statuses, do: @inferable_statuses
 
   @doc """
-  Returns all explicit-only status values.
+  Returns all **explicit-only** CGSN v1.0.0 status identifiers.
 
-  Explicit-only statuses require external information (history, clocks,
-  declarations) and cannot be derived from position alone.
-
-  ## Examples
-
-      iex> Sashite.Cgsn.explicit_only_statuses()
-      ["resignation", "illegalmove", "timelimit", "movelimit", "repetition",
-       "agreement"]
-
+  “Explicit-only” means: the status cannot be derived from *Position + Rule System* alone
+  because it requires external context (history, clocks, declarations, …).
   """
   @spec explicit_only_statuses() :: [status()]
   def explicit_only_statuses, do: @explicit_only_statuses
 
   @doc """
-  Checks if the given value is a valid CGSN status.
+  Checks whether the given value is a **standard CGSN v1.0.0** status identifier.
 
-  ## Parameters
-
-    - `status` - The status string to validate
-
-  ## Examples
-
-      iex> Sashite.Cgsn.valid?("checkmate")
-      true
-
-      iex> Sashite.Cgsn.valid?("resignation")
-      true
-
-      iex> Sashite.Cgsn.valid?("invalid")
-      false
-
-      iex> Sashite.Cgsn.valid?("")
-      false
-
-      iex> Sashite.Cgsn.valid?(nil)
-      false
-
+  This function is intentionally strict: it validates membership in the official
+  CGSN v1.0.0 vocabulary. It does **not** validate or accept non-standard extensions.
   """
   @spec valid?(any()) :: boolean()
   def valid?(status) when is_binary(status) do
-    status in @statuses
+    MapSet.member?(@status_set, status)
   end
 
   def valid?(_), do: false
 
   @doc """
-  Checks if the given status is position-inferable.
+  Checks whether the given status is **position-inferable** in CGSN v1.0.0.
 
-  Returns `true` if the status can be determined from position analysis
-  when game rules are known, `false` otherwise.
-
-  ## Parameters
-
-    - `status` - The status string to check
-
-  ## Examples
-
-      iex> Sashite.Cgsn.inferable?("checkmate")
-      true
-
-      iex> Sashite.Cgsn.inferable?("stalemate")
-      true
-
-      iex> Sashite.Cgsn.inferable?("resignation")
-      false
-
-      iex> Sashite.Cgsn.inferable?("invalid")
-      false
-
+  Returns `false` for non-binary inputs and unknown identifiers.
   """
   @spec inferable?(any()) :: boolean()
   def inferable?(status) when is_binary(status) do
-    status in @inferable_statuses
+    MapSet.member?(@inferable_set, status)
   end
 
   def inferable?(_), do: false
 
   @doc """
-  Checks if the given status is explicit-only.
+  Checks whether the given status is **explicit-only** in CGSN v1.0.0.
 
-  Returns `true` if the status requires external information (history,
-  clocks, declarations) and cannot be derived from position alone,
-  `false` otherwise.
-
-  ## Parameters
-
-    - `status` - The status string to check
-
-  ## Examples
-
-      iex> Sashite.Cgsn.explicit_only?("resignation")
-      true
-
-      iex> Sashite.Cgsn.explicit_only?("timelimit")
-      true
-
-      iex> Sashite.Cgsn.explicit_only?("checkmate")
-      false
-
-      iex> Sashite.Cgsn.explicit_only?("invalid")
-      false
-
+  Returns `false` for non-binary inputs and unknown identifiers.
   """
   @spec explicit_only?(any()) :: boolean()
   def explicit_only?(status) when is_binary(status) do
-    status in @explicit_only_statuses
+    MapSet.member?(@explicit_only_set, status)
   end
 
   def explicit_only?(_), do: false
