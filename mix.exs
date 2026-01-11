@@ -20,7 +20,7 @@ defmodule Sashite.Cgsn.MixProject do
       homepage_url: "https://sashite.dev/specs/cgsn/",
       docs: [
         main: "readme",
-        extras: ["README.md", "LICENSE.md"]
+        extras: ["README.md", "LICENSE"]
       ]
     ]
   end
@@ -49,8 +49,8 @@ defmodule Sashite.Cgsn.MixProject do
   defp package do
     [
       name: "sashite_cgsn",
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE.md),
-      licenses: ["MIT"],
+      files: ~w(lib .formatter.exs mix.exs README.md LICENSE),
+      licenses: ["Apache-2.0"],
       links: %{
         "GitHub" => @source_url,
         "Specification" => "https://sashite.dev/specs/cgsn/1.0.0/",
