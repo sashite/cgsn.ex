@@ -1,20 +1,14 @@
-# Sashite.Cgsn
+# cgsn.ex
 
 [![Hex.pm](https://img.shields.io/hexpm/v/sashite_cgsn.svg)](https://hex.pm/packages/sashite_cgsn)
 [![Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/sashite_cgsn)
 [![License](https://img.shields.io/hexpm/l/sashite_cgsn.svg)](https://github.com/sashite/cgsn.ex/blob/main/LICENSE)
 
-> **CGSN** (Chess Game Status Notation) reference implementation for Elixir.
+> **CGSN** (Chess Game Status Notation) implementation for Elixir.
 
-## What is CGSN?
+## Overview
 
-CGSN (Chess Game Status Notation) defines a **finite, standardized list** of **rule-agnostic** status identifiers describing **observable aspects of a game state** for two-player, turn-based abstract strategy board games.
-
-CGSN focuses on *what can be observed or verified*, not on *how a status impacts the result* (win/loss/draw), which remains Rule System– or competition-defined.
-
-This library implements the **CGSN Specification v1.0.0**:
-- https://sashite.dev/specs/cgsn/1.0.0/
-- Examples: https://sashite.dev/specs/cgsn/1.0.0/examples/
+This library implements the [CGSN Specification v1.0.0](https://sashite.dev/specs/cgsn/1.0.0/).
 
 ## Installation
 
@@ -23,88 +17,129 @@ Add `sashite_cgsn` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:sashite_cgsn, "~> 1.0"}
+    {:sashite_cgsn, "~> 1.1"}
   ]
 end
 ```
 
-## Status identifiers
-
-CGSN status values are **lowercase string identifiers** (e.g. `checkmate`, `repetition`).
-
-CGSN v1.0.0 standard statuses are:
-
-### Terminal Piece statuses (position-inferable)
-
-These describe the condition of a **specific Terminal Piece** of the active player's side relative to opponent capture threats.
-They are **position-inferable** given the current Position + Rule System.
-
-| Status      | Description                                                                                                         |
-| ----------- | ------------------------------------------------------------------------------------------------------------------- |
-| `check`     | A specific Terminal Piece of the active player's side can be captured by an opponent's Pseudo-Legal Move            |
-| `stale`     | A specific Terminal Piece of the active player's side cannot be captured by any opponent's Pseudo-Legal Move        |
-| `checkmate` | That same Terminal Piece is in `check`, and every Pseudo-Legal Move by the active player still leaves it in `check` |
-| `stalemate` | That same Terminal Piece is `stale`, but every Pseudo-Legal Move by the active player would put it in `check`       |
-
-> Note: In CGSN’s model, `check`/`stale` are evaluated **per Terminal Piece** (some games may have multiple Terminal Pieces per side).
-
-### Position statuses (position-inferable)
-
-These describe global properties of the Position (not tied to a single piece).
-
-| Status         | Description                                                                                                             |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `nomove`       | No Pseudo-Legal Moves exist for the active player                                                                       |
-| `bareking`     | At least one side has **exactly one piece on the Board**, and that piece is a Terminal Piece (Hands are not considered) |
-| `mareking`     | At least one side has **no Terminal Pieces on the Board**                                                               |
-| `insufficient` | Under the Rule System’s insufficiency rules, neither side can force a decisive outcome with the available material      |
-
-### External event statuses (explicit-only)
-
-These cannot be derived from Position + Rule System alone. They require extra context (history, clocks, declarations, etc.) and must be explicitly recorded by the surrounding notation when they occur.
-
-| Status        | Description                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------- |
-| `resignation` | A player explicitly resigned                                                                |
-| `illegalmove` | A played move is recognized as not being a Legal Move under the Game Protocol + Rule System |
-| `timelimit`   | A player exceeded the time control limit                                                    |
-| `movelimit`   | The match reached a move-count limit defined by rules or competition regulations            |
-| `repetition`  | A position repeated according to the Rule System’s repetition policy                        |
-| `agreement`   | Both players mutually agreed to end the match                                               |
-
 ## Usage
 
+### Parsing (String → Atom)
+
+Convert a CGSN string into an atom.
+
 ```elixir
-# Validation (CGSN v1.0.0 standard vocabulary)
-Sashite.Cgsn.valid?("checkmate")      # => true
-Sashite.Cgsn.valid?("resignation")    # => true
-Sashite.Cgsn.valid?("invalid")        # => false
-Sashite.Cgsn.valid?("")               # => false
+# Standard parsing (returns {:ok, atom} or {:error, reason})
+{:ok, :checkmate} = Sashite.Cgsn.parse("checkmate")
+{:ok, :resignation} = Sashite.Cgsn.parse("resignation")
 
-# Classification
-Sashite.Cgsn.inferable?("checkmate")        # => true
-Sashite.Cgsn.inferable?("repetition")       # => false
+# Bang version (raises on error)
+:checkmate = Sashite.Cgsn.parse!("checkmate")
 
-Sashite.Cgsn.explicit_only?("repetition")   # => true
-Sashite.Cgsn.explicit_only?("stalemate")    # => false
-
-# Lists
-Sashite.Cgsn.statuses()
-# => ["check", "stale", "checkmate", "stalemate", "nomove", "bareking", "mareking", "insufficient",
-#     "resignation", "illegalmove", "timelimit", "movelimit", "repetition", "agreement"]
-
-Sashite.Cgsn.inferable_statuses()
-# => ["check", "stale", "checkmate", "stalemate", "nomove", "bareking", "mareking", "insufficient"]
-
-Sashite.Cgsn.explicit_only_statuses()
-# => ["resignation", "illegalmove", "timelimit", "movelimit", "repetition", "agreement"]
+# Invalid input
+{:error, :invalid_status} = Sashite.Cgsn.parse("invalid")
+{:error, :invalid_status} = Sashite.Cgsn.parse("")
 ```
 
-## Rule-agnostic design
+### Validation
 
-CGSN records **observable conditions** without defining outcomes.
+```elixir
+# Boolean check
+Sashite.Cgsn.valid?("checkmate")    # => true
+Sashite.Cgsn.valid?("resignation")  # => true
+Sashite.Cgsn.valid?("invalid")      # => false
+Sashite.Cgsn.valid?("")             # => false
+Sashite.Cgsn.valid?(nil)            # => false
+```
 
-Example: `stalemate` is commonly a draw in Western chess, but other Rule Systems may treat it differently. CGSN only records the underlying condition.
+### Classification
+
+```elixir
+# Position-inferable: can be determined from Position + Rule System
+Sashite.Cgsn.inferable?(:checkmate)   # => true
+Sashite.Cgsn.inferable?(:stalemate)   # => true
+Sashite.Cgsn.inferable?(:repetition)  # => false
+
+# Explicit-only: requires external context (history, clocks, declarations)
+Sashite.Cgsn.explicit_only?(:resignation)  # => true
+Sashite.Cgsn.explicit_only?(:timelimit)    # => true
+Sashite.Cgsn.explicit_only?(:checkmate)    # => false
+```
+
+### Accessing Statuses
+
+```elixir
+# All statuses (unordered)
+Sashite.Cgsn.statuses()
+# => MapSet.new([:check, :stale, :checkmate, :stalemate, :nomove, :bareking,
+#                :mareking, :insufficient, :resignation, :illegalmove, :timelimit,
+#                :movelimit, :repetition, :agreement])
+
+# Position-inferable statuses
+Sashite.Cgsn.inferable_statuses()
+# => MapSet.new([:check, :stale, :checkmate, :stalemate, :nomove, :bareking,
+#                :mareking, :insufficient])
+
+# Explicit-only statuses
+Sashite.Cgsn.explicit_only_statuses()
+# => MapSet.new([:resignation, :illegalmove, :timelimit, :movelimit, :repetition,
+#                :agreement])
+```
+
+## API Reference
+
+### Constants
+
+```elixir
+Sashite.Cgsn.statuses()               # MapSet of all 14 status atoms
+Sashite.Cgsn.inferable_statuses()     # MapSet of 8 position-inferable atoms
+Sashite.Cgsn.explicit_only_statuses() # MapSet of 6 explicit-only atoms
+```
+
+### Parsing
+
+```elixir
+# Parses a CGSN string into an atom.
+# Returns {:ok, atom} or {:error, :invalid_status}.
+@spec parse(String.t()) :: {:ok, atom()} | {:error, :invalid_status}
+
+# Parses a CGSN string into an atom.
+# Raises ArgumentError if the string is not valid.
+@spec parse!(String.t()) :: atom()
+```
+
+### Validation
+
+```elixir
+# Reports whether string is a valid CGSN status identifier.
+@spec valid?(term()) :: boolean()
+```
+
+### Classification
+
+```elixir
+# Reports whether status is position-inferable.
+@spec inferable?(atom()) :: boolean()
+
+# Reports whether status is explicit-only.
+@spec explicit_only?(atom()) :: boolean()
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `{:error, :invalid_status}` | Input is not a valid CGSN status |
+| `ArgumentError` | Bang function with invalid input |
+
+## Design Principles
+
+- **Atom-based**: Statuses represented as Elixir atoms for identity semantics
+- **MapSet-based**: Unordered collections reflect vocabulary nature
+- **Elixir idioms**: `{:ok, _}` / `{:error, _}` tuples, `parse!` bang variant
+- **Strict validation**: Only standard v1.0.0 vocabulary accepted
+- **Rule-agnostic**: Records conditions without defining outcomes
+- **No dependencies**: Pure Elixir standard library only
 
 ## Related Specifications
 

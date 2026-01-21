@@ -1,289 +1,346 @@
 defmodule Sashite.CgsnTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
+
   doctest Sashite.Cgsn
 
-  describe "statuses/0" do
-    test "returns all defined CGSN status values" do
-      statuses = Sashite.Cgsn.statuses()
+  # ============================================================================
+  # Constants
+  # ============================================================================
 
-      assert is_list(statuses)
-      assert length(statuses) == 14
-
-      # Verify all expected statuses are present
-      expected_statuses = [
-        "check",
-        "stale",
-        "checkmate",
-        "stalemate",
-        "nomove",
-        "bareking",
-        "mareking",
-        "insufficient",
-        "resignation",
-        "illegalmove",
-        "timelimit",
-        "movelimit",
-        "repetition",
-        "agreement"
-      ]
-
-      assert Enum.sort(statuses) == Enum.sort(expected_statuses)
+  describe "constants" do
+    test "statuses/0 returns a MapSet" do
+      assert %MapSet{} = Sashite.Cgsn.statuses()
     end
 
-    test "returns inferable and explicit-only statuses combined" do
-      all_statuses = Sashite.Cgsn.statuses()
-      inferable = Sashite.Cgsn.inferable_statuses()
-      explicit_only = Sashite.Cgsn.explicit_only_statuses()
-
-      assert Enum.sort(all_statuses) == Enum.sort(inferable ++ explicit_only)
+    test "statuses/0 contains 14 atoms" do
+      assert MapSet.size(Sashite.Cgsn.statuses()) == 14
     end
-  end
 
-  describe "inferable_statuses/0" do
-    test "returns all position-inferable status values" do
-      statuses = Sashite.Cgsn.inferable_statuses()
+    test "inferable_statuses/0 returns a MapSet" do
+      assert %MapSet{} = Sashite.Cgsn.inferable_statuses()
+    end
 
-      assert is_list(statuses)
-      assert length(statuses) == 8
+    test "inferable_statuses/0 contains 8 atoms" do
+      assert MapSet.size(Sashite.Cgsn.inferable_statuses()) == 8
+    end
 
-      expected_statuses = [
-        "check",
-        "stale",
-        "checkmate",
-        "stalemate",
-        "nomove",
-        "bareking",
-        "mareking",
-        "insufficient"
-      ]
+    test "explicit_only_statuses/0 returns a MapSet" do
+      assert %MapSet{} = Sashite.Cgsn.explicit_only_statuses()
+    end
 
-      assert Enum.sort(statuses) == Enum.sort(expected_statuses)
+    test "explicit_only_statuses/0 contains 6 atoms" do
+      assert MapSet.size(Sashite.Cgsn.explicit_only_statuses()) == 6
+    end
+
+    test "statuses/0 is union of inferable and explicit_only" do
+      union = MapSet.union(
+        Sashite.Cgsn.inferable_statuses(),
+        Sashite.Cgsn.explicit_only_statuses()
+      )
+      assert Sashite.Cgsn.statuses() == union
+    end
+
+    test "all statuses are atoms" do
+      Sashite.Cgsn.statuses()
+      |> Enum.each(fn status ->
+        assert is_atom(status)
+      end)
     end
   end
 
-  describe "explicit_only_statuses/0" do
-    test "returns all explicit-only status values" do
-      statuses = Sashite.Cgsn.explicit_only_statuses()
+  # ============================================================================
+  # parse/1
+  # ============================================================================
 
-      assert is_list(statuses)
-      assert length(statuses) == 6
+  describe "parse/1" do
+    test "parses 'checkmate' to {:ok, :checkmate}" do
+      assert {:ok, :checkmate} = Sashite.Cgsn.parse("checkmate")
+    end
 
-      expected_statuses = [
-        "resignation",
-        "illegalmove",
-        "timelimit",
-        "movelimit",
-        "repetition",
-        "agreement"
-      ]
+    test "parses 'resignation' to {:ok, :resignation}" do
+      assert {:ok, :resignation} = Sashite.Cgsn.parse("resignation")
+    end
 
-      assert Enum.sort(statuses) == Enum.sort(expected_statuses)
+    test "parses all inferable statuses" do
+      ~w[check stale checkmate stalemate nomove bareking mareking insufficient]
+      |> Enum.each(fn str ->
+        assert {:ok, atom} = Sashite.Cgsn.parse(str)
+        assert atom == String.to_atom(str)
+      end)
+    end
+
+    test "parses all explicit-only statuses" do
+      ~w[resignation illegalmove timelimit movelimit repetition agreement]
+      |> Enum.each(fn str ->
+        assert {:ok, atom} = Sashite.Cgsn.parse(str)
+        assert atom == String.to_atom(str)
+      end)
+    end
+
+    test "returns {:error, :invalid_status} for invalid status" do
+      assert {:error, :invalid_status} = Sashite.Cgsn.parse("invalid")
+    end
+
+    test "returns {:error, :invalid_status} for empty string" do
+      assert {:error, :invalid_status} = Sashite.Cgsn.parse("")
+    end
+
+    test "returns {:error, :invalid_status} for uppercase" do
+      assert {:error, :invalid_status} = Sashite.Cgsn.parse("CHECKMATE")
+    end
+
+    test "returns {:error, :invalid_status} for mixed case" do
+      assert {:error, :invalid_status} = Sashite.Cgsn.parse("Checkmate")
+    end
+
+    test "returns {:error, :invalid_status} for nil" do
+      assert {:error, :invalid_status} = Sashite.Cgsn.parse(nil)
+    end
+
+    test "returns {:error, :invalid_status} for atom" do
+      assert {:error, :invalid_status} = Sashite.Cgsn.parse(:checkmate)
+    end
+
+    test "returns {:error, :invalid_status} for integer" do
+      assert {:error, :invalid_status} = Sashite.Cgsn.parse(123)
     end
   end
+
+  # ============================================================================
+  # parse!/1
+  # ============================================================================
+
+  describe "parse!/1" do
+    test "parses 'checkmate' to :checkmate" do
+      assert :checkmate = Sashite.Cgsn.parse!("checkmate")
+    end
+
+    test "parses 'resignation' to :resignation" do
+      assert :resignation = Sashite.Cgsn.parse!("resignation")
+    end
+
+    test "parses all valid statuses" do
+      ~w[check stale checkmate stalemate nomove bareking mareking insufficient
+         resignation illegalmove timelimit movelimit repetition agreement]
+      |> Enum.each(fn str ->
+        assert Sashite.Cgsn.parse!(str) == String.to_atom(str)
+      end)
+    end
+
+    test "raises ArgumentError for invalid status" do
+      assert_raise ArgumentError, "invalid status", fn ->
+        Sashite.Cgsn.parse!("invalid")
+      end
+    end
+
+    test "raises ArgumentError for empty string" do
+      assert_raise ArgumentError, "invalid status", fn ->
+        Sashite.Cgsn.parse!("")
+      end
+    end
+
+    test "raises ArgumentError for uppercase" do
+      assert_raise ArgumentError, "invalid status", fn ->
+        Sashite.Cgsn.parse!("CHECKMATE")
+      end
+    end
+
+    test "raises ArgumentError for mixed case" do
+      assert_raise ArgumentError, "invalid status", fn ->
+        Sashite.Cgsn.parse!("Checkmate")
+      end
+    end
+  end
+
+  # ============================================================================
+  # valid?/1
+  # ============================================================================
 
   describe "valid?/1" do
-    test "returns true for all inferable statuses" do
-      Sashite.Cgsn.inferable_statuses()
-      |> Enum.each(fn status ->
-        assert Sashite.Cgsn.valid?(status), "Expected #{status} to be valid"
+    test "returns true for all valid statuses" do
+      ~w[check stale checkmate stalemate nomove bareking mareking insufficient
+         resignation illegalmove timelimit movelimit repetition agreement]
+      |> Enum.each(fn str ->
+        assert Sashite.Cgsn.valid?(str) == true
       end)
     end
 
-    test "returns true for all explicit-only statuses" do
-      Sashite.Cgsn.explicit_only_statuses()
-      |> Enum.each(fn status ->
-        assert Sashite.Cgsn.valid?(status), "Expected #{status} to be valid"
-      end)
-    end
-
-    test "returns true for specific valid statuses" do
-      assert Sashite.Cgsn.valid?("checkmate")
-      assert Sashite.Cgsn.valid?("resignation")
-      assert Sashite.Cgsn.valid?("stalemate")
-      assert Sashite.Cgsn.valid?("timelimit")
-    end
-
-    test "returns false for invalid statuses" do
+    test "returns false for invalid status" do
       refute Sashite.Cgsn.valid?("invalid")
-      refute Sashite.Cgsn.valid?("check_mate")
-      refute Sashite.Cgsn.valid?("CHECKMATE")
-      refute Sashite.Cgsn.valid?("Check")
-      refute Sashite.Cgsn.valid?("unknown")
     end
 
     test "returns false for empty string" do
       refute Sashite.Cgsn.valid?("")
     end
 
+    test "returns false for uppercase" do
+      refute Sashite.Cgsn.valid?("CHECKMATE")
+    end
+
+    test "returns false for mixed case" do
+      refute Sashite.Cgsn.valid?("Checkmate")
+    end
+
     test "returns false for nil" do
       refute Sashite.Cgsn.valid?(nil)
     end
 
-    test "returns false for non-string types" do
-      refute Sashite.Cgsn.valid?(123)
+    test "returns false for atom" do
       refute Sashite.Cgsn.valid?(:checkmate)
-      refute Sashite.Cgsn.valid?(%{})
-      refute Sashite.Cgsn.valid?([])
+    end
+
+    test "returns false for integer" do
+      refute Sashite.Cgsn.valid?(123)
+    end
+
+    test "returns false for list" do
+      refute Sashite.Cgsn.valid?(["checkmate"])
+    end
+
+    test "returns false for map" do
+      refute Sashite.Cgsn.valid?(%{status: "checkmate"})
     end
   end
 
+  # ============================================================================
+  # inferable?/1
+  # ============================================================================
+
   describe "inferable?/1" do
     test "returns true for all inferable statuses" do
-      inferable_statuses = [
-        "check",
-        "stale",
-        "checkmate",
-        "stalemate",
-        "nomove",
-        "bareking",
-        "mareking",
-        "insufficient"
-      ]
-
-      Enum.each(inferable_statuses, fn status ->
-        assert Sashite.Cgsn.inferable?(status), "Expected #{status} to be inferable"
+      [:check, :stale, :checkmate, :stalemate, :nomove, :bareking, :mareking, :insufficient]
+      |> Enum.each(fn status ->
+        assert Sashite.Cgsn.inferable?(status) == true
       end)
     end
 
-    test "returns false for all explicit-only statuses" do
-      explicit_only_statuses = [
-        "resignation",
-        "illegalmove",
-        "timelimit",
-        "movelimit",
-        "repetition",
-        "agreement"
-      ]
-
-      Enum.each(explicit_only_statuses, fn status ->
-        refute Sashite.Cgsn.inferable?(status), "Expected #{status} not to be inferable"
+    test "returns false for explicit-only statuses" do
+      [:resignation, :illegalmove, :timelimit, :movelimit, :repetition, :agreement]
+      |> Enum.each(fn status ->
+        refute Sashite.Cgsn.inferable?(status)
       end)
     end
 
-    test "returns false for invalid statuses" do
-      refute Sashite.Cgsn.inferable?("invalid")
-      refute Sashite.Cgsn.inferable?("unknown")
+    test "returns false for invalid atom" do
+      refute Sashite.Cgsn.inferable?(:invalid)
     end
 
-    test "returns false for empty string" do
-      refute Sashite.Cgsn.inferable?("")
+    test "returns false for string" do
+      refute Sashite.Cgsn.inferable?("checkmate")
     end
 
     test "returns false for nil" do
       refute Sashite.Cgsn.inferable?(nil)
     end
 
-    test "returns false for non-string types" do
+    test "returns false for integer" do
       refute Sashite.Cgsn.inferable?(123)
-      refute Sashite.Cgsn.inferable?(:checkmate)
     end
   end
 
+  # ============================================================================
+  # explicit_only?/1
+  # ============================================================================
+
   describe "explicit_only?/1" do
     test "returns true for all explicit-only statuses" do
-      explicit_only_statuses = [
-        "resignation",
-        "illegalmove",
-        "timelimit",
-        "movelimit",
-        "repetition",
-        "agreement"
-      ]
-
-      Enum.each(explicit_only_statuses, fn status ->
-        assert Sashite.Cgsn.explicit_only?(status), "Expected #{status} to be explicit-only"
+      [:resignation, :illegalmove, :timelimit, :movelimit, :repetition, :agreement]
+      |> Enum.each(fn status ->
+        assert Sashite.Cgsn.explicit_only?(status) == true
       end)
     end
 
-    test "returns false for all inferable statuses" do
-      inferable_statuses = [
-        "check",
-        "stale",
-        "checkmate",
-        "stalemate",
-        "nomove",
-        "bareking",
-        "mareking",
-        "insufficient"
-      ]
-
-      Enum.each(inferable_statuses, fn status ->
-        refute Sashite.Cgsn.explicit_only?(status),
-               "Expected #{status} not to be explicit-only"
+    test "returns false for inferable statuses" do
+      [:check, :stale, :checkmate, :stalemate, :nomove, :bareking, :mareking, :insufficient]
+      |> Enum.each(fn status ->
+        refute Sashite.Cgsn.explicit_only?(status)
       end)
     end
 
-    test "returns false for invalid statuses" do
-      refute Sashite.Cgsn.explicit_only?("invalid")
-      refute Sashite.Cgsn.explicit_only?("unknown")
+    test "returns false for invalid atom" do
+      refute Sashite.Cgsn.explicit_only?(:invalid)
     end
 
-    test "returns false for empty string" do
-      refute Sashite.Cgsn.explicit_only?("")
+    test "returns false for string" do
+      refute Sashite.Cgsn.explicit_only?("resignation")
     end
 
     test "returns false for nil" do
       refute Sashite.Cgsn.explicit_only?(nil)
     end
 
-    test "returns false for non-string types" do
+    test "returns false for integer" do
       refute Sashite.Cgsn.explicit_only?(123)
-      refute Sashite.Cgsn.explicit_only?(:resignation)
     end
   end
 
-  describe "categorization consistency" do
-    test "every status is either inferable or explicit-only, not both" do
-      Sashite.Cgsn.statuses()
-      |> Enum.each(fn status ->
-        is_inferable = Sashite.Cgsn.inferable?(status)
-        is_explicit_only = Sashite.Cgsn.explicit_only?(status)
+  # ============================================================================
+  # statuses/0
+  # ============================================================================
 
-        assert is_inferable != is_explicit_only,
-               "Status #{status} must be exactly one of: inferable or explicit-only"
-      end)
-    end
-
-    test "every status is valid" do
-      Sashite.Cgsn.statuses()
-      |> Enum.each(fn status ->
-        assert Sashite.Cgsn.valid?(status), "Expected #{status} to be valid"
-      end)
+  describe "statuses/0" do
+    test "contains all expected statuses" do
+      expected = MapSet.new([
+        :check, :stale, :checkmate, :stalemate, :nomove, :bareking, :mareking, :insufficient,
+        :resignation, :illegalmove, :timelimit, :movelimit, :repetition, :agreement
+      ])
+      assert Sashite.Cgsn.statuses() == expected
     end
   end
 
-  describe "game examples" do
-    test "Western Chess - Scholar's Mate" do
-      assert Sashite.Cgsn.valid?("checkmate")
-      assert Sashite.Cgsn.inferable?("checkmate")
-      refute Sashite.Cgsn.explicit_only?("checkmate")
+  # ============================================================================
+  # inferable_statuses/0
+  # ============================================================================
+
+  describe "inferable_statuses/0" do
+    test "contains all expected inferable statuses" do
+      expected = MapSet.new([
+        :check, :stale, :checkmate, :stalemate, :nomove, :bareking, :mareking, :insufficient
+      ])
+      assert Sashite.Cgsn.inferable_statuses() == expected
+    end
+  end
+
+  # ============================================================================
+  # explicit_only_statuses/0
+  # ============================================================================
+
+  describe "explicit_only_statuses/0" do
+    test "contains all expected explicit-only statuses" do
+      expected = MapSet.new([
+        :resignation, :illegalmove, :timelimit, :movelimit, :repetition, :agreement
+      ])
+      assert Sashite.Cgsn.explicit_only_statuses() == expected
+    end
+  end
+
+  # ============================================================================
+  # Round-trip tests
+  # ============================================================================
+
+  describe "round-trip" do
+    test "parse then check inferable" do
+      {:ok, status} = Sashite.Cgsn.parse("checkmate")
+      assert Sashite.Cgsn.inferable?(status)
     end
 
-    test "Western Chess - resignation" do
-      assert Sashite.Cgsn.valid?("resignation")
-      refute Sashite.Cgsn.inferable?("resignation")
-      assert Sashite.Cgsn.explicit_only?("resignation")
+    test "parse then check explicit_only" do
+      {:ok, status} = Sashite.Cgsn.parse("resignation")
+      assert Sashite.Cgsn.explicit_only?(status)
     end
 
-    test "Shōgi - tsume (checkmate)" do
-      assert Sashite.Cgsn.valid?("checkmate")
-      assert Sashite.Cgsn.inferable?("checkmate")
+    test "all parsed statuses are in statuses set" do
+      ~w[check stale checkmate stalemate nomove bareking mareking insufficient
+         resignation illegalmove timelimit movelimit repetition agreement]
+      |> Enum.each(fn str ->
+        {:ok, status} = Sashite.Cgsn.parse(str)
+        assert MapSet.member?(Sashite.Cgsn.statuses(), status)
+      end)
     end
 
-    test "Shōgi - sennichite (repetition)" do
-      assert Sashite.Cgsn.valid?("repetition")
-      refute Sashite.Cgsn.inferable?("repetition")
-      assert Sashite.Cgsn.explicit_only?("repetition")
-    end
-
-    test "Xiangqi - jiāng-jūn (check)" do
-      assert Sashite.Cgsn.valid?("check")
-      assert Sashite.Cgsn.inferable?("check")
-    end
-
-    test "Xiangqi - bare king" do
-      assert Sashite.Cgsn.valid?("bareking")
-      assert Sashite.Cgsn.inferable?("bareking")
+    test "parse! then check classification" do
+      assert Sashite.Cgsn.inferable?(Sashite.Cgsn.parse!("stalemate"))
+      assert Sashite.Cgsn.explicit_only?(Sashite.Cgsn.parse!("timelimit"))
     end
   end
 end
